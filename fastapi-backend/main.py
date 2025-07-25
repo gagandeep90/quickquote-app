@@ -86,13 +86,15 @@ async def get_quote(file: UploadFile = File(...),
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
             elif t == "POLYLINE":
-                vertices = [(v.dxf.location.x, v.dxf.location.y) for v in e.vertices()]
-                for i in range(len(vertices) - 1):
-                    x1, y1 = vertices[i]
-                    x2, y2 = vertices[i + 1]
-                    cut_length += math.dist([x1, y1], [x2, y2])
-                    min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
-                    min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
+    # Support both property and callable vertices()
+    verts = e.vertices if isinstance(e.vertices, list) else list(e.vertices())
+    vertices = [(v.dxf.location.x, v.dxf.location.y) for v in verts]
+    for i in range(len(vertices) - 1):
+        x1, y1 = vertices[i]
+        x2, y2 = vertices[i + 1]
+        cut_length += math.dist([x1, y1], [x2, y2])
+        min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
+        min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
             elif t == "ARC":
                 center = e.dxf.center
