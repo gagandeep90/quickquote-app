@@ -10,8 +10,9 @@
     "react-dropzone": "^14.2.3",
     "react-scripts": "5.0.1"
   },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
-  }
+"scripts": {
+  "start": "react-scripts start",
+  "build": "react-scripts build",
+  "postinstall": "npm install dxf-parser@^1.0.0"
+}
 }
