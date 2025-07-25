@@ -35,7 +35,7 @@ async def get_quote(file: UploadFile = File(...),
     # ✅ DXF Parsing
     if filename.endswith(".dxf"):
         try:
-            doc = ezdxf.read(io.BytesIO(content), legacy_mode=True)
+            doc = ezdxf.read(io.BytesIO(content)
             msp = doc.modelspace()
 
             min_x = min_y = math.inf
