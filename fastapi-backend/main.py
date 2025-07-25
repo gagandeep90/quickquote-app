@@ -9,7 +9,7 @@ import traceback
 
 app = FastAPI()
 
-# Allow CORS for frontend
+# Allow frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,8 +40,9 @@ async def get_quote(file: UploadFile = File(...),
     # ✅ DXF Parsing
     if filename.endswith(".dxf"):
         try:
-            # Use standard read() without legacy_mode
-            doc = ezdxf.read(io.BytesIO(content))
+            # Use BytesIO stream explicitly
+            stream = io.BytesIO(content)
+            doc = ezdxf.read(stream)
             msp = doc.modelspace()
 
             if not msp:
@@ -116,9 +117,9 @@ async def get_quote(file: UploadFile = File(...),
 
     # ✅ Pricing
     area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
-    material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)  # OMR/m²
-    cutting_rate = 0.2  # OMR per meter
-    pierce_rate = 0.05  # OMR per hole
+    material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
+    cutting_rate = 0.2  # per meter
+    pierce_rate = 0.05  # per hole
     setup_fee = 5
 
     material_cost = (area_mm2 / 1e6) * material_rate
