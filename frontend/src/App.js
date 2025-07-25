@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
 
-// ✅ Replace this with your actual Railway backend URL
-const backendUrl = 'https://quickquote-app-production-712f.up.railway.app';
+// ✅ Replace with your actual Railway backend URL
+const backendUrl = 'https://quickquote-fastapi.up.railway.app';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -15,14 +15,13 @@ function App() {
 
   const onDrop = (acceptedFiles) => {
     setFile(acceptedFiles[0]);
-    setQuote(null); // reset quote if new file uploaded
+    setQuote(null);
   };
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
 
   const getQuote = async () => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('material', material);
@@ -34,6 +33,7 @@ function App() {
       const response = await axios.post(`${backendUrl}/quote`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      console.log('Backend Response:', response.data);
       setQuote(response.data);
     } catch (err) {
       console.error('Quote error:', err);
@@ -50,7 +50,7 @@ function App() {
       {/* File Upload */}
       <div {...getRootProps()} style={{ border: '2px dashed gray', padding: 20, marginBottom: 20, cursor: 'pointer' }}>
         <input {...getInputProps()} />
-        {file ? <p>{file.name}</p> : <p>Drag & drop DXF/SVG/STEP file here or click to select</p>}
+        {file ? <p>{file.name}</p> : <p>Drag & drop DXF file here or click to select</p>}
       </div>
 
       {/* Material */}
@@ -99,25 +99,38 @@ function App() {
       {/* Quote Results */}
       {quote && (
         <div style={{ marginTop: 30, padding: 20, border: '1px solid #ccc', background: '#f9f9f9' }}>
-          <h3>Part Metrics</h3>
-          <p>Bounding Box: {quote.metrics.bounding_box[0]} x {quote.metrics.bounding_box[1]} mm</p>
-          <p>Cut Length: {quote.metrics.cut_length} mm</p>
-          <p>Hole Count: {quote.metrics.hole_count}</p>
-
-          {quote.metrics.warnings.length > 0 && (
+          {quote.error ? (
             <div style={{ color: 'red' }}>
-              <strong>Warnings:</strong>
-              <ul>
-                {quote.metrics.warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
+              <h3>Error</h3>
+              <p>{quote.error}</p>
             </div>
-          )}
+          ) : (
+            <>
+              <h3>Part Metrics</h3>
+              <p><strong>Bounding Box:</strong> {quote.metrics.bounding_box[0]} × {quote.metrics.bounding_box[1]} mm</p>
+              <p><strong>Cut Length:</strong> {quote.metrics.cut_length} mm</p>
+              <p><strong>Hole Count:</strong> {quote.metrics.hole_count}</p>
+              {quote.metrics.hole_diameters.length > 0 && (
+                <p><strong>Hole Diameters:</strong> {quote.metrics.hole_diameters.join(', ')} mm</p>
+              )}
 
-          <h3>Quote</h3>
-          <p>Material Cost: {quote.pricing.material_cost} OMR</p>
-          <p>Cutting Cost: {quote.pricing.cutting_cost} OMR</p>
-          <p>Setup Fee: {quote.pricing.setup_fee} OMR</p>
-          <strong>Total: {quote.pricing.total} OMR</strong>
+              {quote.metrics.warnings.length > 0 && (
+                <div style={{ color: 'red', marginTop: 10 }}>
+                  <strong>Warnings:</strong>
+                  <ul>
+                    {quote.metrics.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <h3 style={{ marginTop: 20 }}>Pricing</h3>
+              <p>Material Cost: {quote.pricing.material_cost} OMR</p>
+              <p>Cutting Cost: {quote.pricing.cutting_cost} OMR</p>
+              <p>Pierce Cost: {quote.pricing.pierce_cost} OMR</p>
+              <p>Setup Fee: {quote.pricing.setup_fee} OMR</p>
+              <strong>Total: {quote.pricing.total} OMR</strong>
+            </>
+          )}
         </div>
       )}
     </div>
