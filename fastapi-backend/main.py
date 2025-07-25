@@ -1,19 +1,19 @@
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-import ezdxf
-import math
-import io
-import os
-import uvicorn
-import tempfile
-import traceback
+import ezdxf, math, io, os, uvicorn, tempfile, traceback
 
 app = FastAPI()
 
-# Allow CORS for frontend
+# ✅ Allow your Vercel frontend + local dev
+origins = [
+    "https://quickquote-krqbgubjl-gagandeeps-projects-cc22bc47.vercel.app",
+    "http://localhost:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -23,9 +23,6 @@ async def get_quote(file: UploadFile = File(...),
                     material: str = Form(...),
                     thickness: float = Form(...),
                     quantity: int = Form(...)):
-
-    print(f"Received file: {file.filename}")
-    print(f"Material: {material}, Thickness: {thickness}, Quantity: {quantity}")
 
     filename = file.filename.lower()
     content = await file.read()
@@ -40,7 +37,7 @@ async def get_quote(file: UploadFile = File(...),
 
     if filename.endswith(".dxf"):
         try:
-            # ✅ Write uploaded file to temp file and load via readfile()
+            # ✅ Load file via temp file for ezdxf compatibility
             with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
                 tmp.write(content)
                 tmp.flush()
@@ -49,8 +46,9 @@ async def get_quote(file: UploadFile = File(...),
             doc = ezdxf.readfile(tmp_path)
             msp = doc.modelspace()
 
-            if not msp:
-                return {"error": "DXF file contains no entities."}
+            # ✅ Explode all block inserts to flatten geometry
+            for insert in msp.query('INSERT'):
+                insert.explode()
 
             min_x = min_y = math.inf
             max_x = max_y = -math.inf
@@ -61,6 +59,7 @@ async def get_quote(file: UploadFile = File(...),
             for e in msp:
                 t = e.dxftype()
 
+                # CIRCLE
                 if t == "CIRCLE":
                     holes += 1
                     cx, cy, r = e.dxf.center.x, e.dxf.center.y, e.dxf.radius
@@ -69,12 +68,14 @@ async def get_quote(file: UploadFile = File(...),
                     cut_length += 2 * math.pi * r
                     hole_diams.append(round(r * 2, 2))
 
+                # LINE
                 elif t == "LINE":
                     x1, y1, x2, y2 = e.dxf.start.x, e.dxf.start.y, e.dxf.end.x, e.dxf.end.y
                     min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
                     cut_length += math.dist([x1, y1], [x2, y2])
 
+                # ARC
                 elif t == "ARC":
                     center = e.dxf.center
                     radius = e.dxf.radius
@@ -87,6 +88,7 @@ async def get_quote(file: UploadFile = File(...),
                     min_y = min(min_y, center.y - radius)
                     max_y = max(max_y, center.y + radius)
 
+                # LWPOLYLINE
                 elif t == "LWPOLYLINE":
                     pts = [(v[0], v[1]) for v in e.get_points()]
                     for i in range(len(pts) - 1):
@@ -95,6 +97,26 @@ async def get_quote(file: UploadFile = File(...),
                         x2, y2 = pts[i + 1]
                         min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                         min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
+
+                # ✅ POLYLINE
+                elif t == "POLYLINE":
+                    pts = [(v.dxf.location.x, v.dxf.location.y) for v in e.vertices]
+                    for i in range(len(pts) - 1):
+                        cut_length += math.dist(pts[i], pts[i + 1])
+                        x1, y1 = pts[i]
+                        x2, y2 = pts[i + 1]
+                        min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
+                        min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
+
+                # ✅ SPLINE (approximate using fit points)
+                elif t == "SPLINE":
+                    fit_points = e.fit_points
+                    for i in range(len(fit_points) - 1):
+                        p1 = fit_points[i]
+                        p2 = fit_points[i + 1]
+                        cut_length += math.dist((p1[0], p1[1]), (p2[0], p2[1]))
+                        min_x, max_x = min(min_x, p1[0], p2[0]), max(max_x, p1[0], p2[0])
+                        min_y, max_y = min(min_y, p1[1], p2[1]), max(max_y, p1[1], p2[1])
 
             if min_x == math.inf:
                 return {"error": "No supported entities found in DXF file."}
