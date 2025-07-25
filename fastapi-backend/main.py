@@ -33,11 +33,9 @@ async def get_quote(file: UploadFile = File(...),
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
 
-        # ✅ Explode all INSERT/BLOCK references to flatten geometry
         for insert in list(msp.query('INSERT')):
             insert.explode()
 
-        # ✅ Generate server-side SVG
         import io
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
@@ -54,7 +52,6 @@ async def get_quote(file: UploadFile = File(...),
         canvas.print_svg(svg_buffer)
         svg_data = svg_buffer.getvalue()
 
-        # ✅ Metric calculations
         min_x = min_y = math.inf
         max_x = max_y = -math.inf
         cut_length = 0
@@ -63,7 +60,7 @@ async def get_quote(file: UploadFile = File(...),
 
         for e in msp:
             t = e.dxftype()
-            print(f"Entity Type: {t}")  # ✅ Debug log all entity types
+            print(f"Entity Type: {t}")
 
             if t == "CIRCLE":
                 hole_count += 1
@@ -85,6 +82,15 @@ async def get_quote(file: UploadFile = File(...),
                     cut_length += math.dist(pts[i], pts[i + 1])
                     x1, y1 = pts[i]
                     x2, y2 = pts[i + 1]
+                    min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
+                    min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
+
+            elif t == "POLYLINE":
+                vertices = [(v.dxf.location.x, v.dxf.location.y) for v in e.vertices()]
+                for i in range(len(vertices) - 1):
+                    x1, y1 = vertices[i]
+                    x2, y2 = vertices[i + 1]
+                    cut_length += math.dist([x1, y1], [x2, y2])
                     min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
@@ -126,9 +132,6 @@ async def get_quote(file: UploadFile = File(...),
                             min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                             min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
-            else:
-                print(f"Skipping entity: {t}")  # ✅ Logs unknowns
-
         if min_x == math.inf:
             return {"error": "No supported entities found in DXF file."}
 
@@ -142,7 +145,6 @@ async def get_quote(file: UploadFile = File(...),
             "warnings": []
         }
 
-        # ✅ Simple pricing model
         area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
         material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
         cutting_rate = 0.2
