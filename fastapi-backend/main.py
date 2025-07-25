@@ -1,12 +1,14 @@
-
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import ezdxf
 import math
 import io
+import os
+import uvicorn
 
 app = FastAPI()
 
+# Allow frontend to call backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,6 +22,9 @@ async def get_quote(file: UploadFile = File(...),
                     thickness: float = Form(...),
                     quantity: int = Form(...)):
 
+    print(f"Received file: {file.filename}")
+    print(f"Material: {material}, Thickness: {thickness}, Quantity: {quantity}")
+
     filename = file.filename.lower()
     content = await file.read()
 
@@ -30,6 +35,7 @@ async def get_quote(file: UploadFile = File(...),
         "warnings": []
     }
 
+    # DXF parsing
     if filename.endswith(".dxf"):
         try:
             doc = ezdxf.read(io.BytesIO(content))
@@ -70,6 +76,7 @@ async def get_quote(file: UploadFile = File(...),
     elif filename.endswith(".step") or filename.endswith(".stp"):
         metrics["warnings"].append("STEP parsing placeholder: metrics not computed yet.")
 
+    # Pricing (dummy logic)
     area = metrics["bounding_box"][0] * metrics["bounding_box"][1]
     material_rate = {"Aluminum": 1.2, "Steel": 1.5, "Brass": 1.8}.get(material, 1.0)
     cutting_rate = 0.05
@@ -88,3 +95,8 @@ async def get_quote(file: UploadFile = File(...),
             "total": round(total, 2)
         }
     }
+
+# ✅ Railway needs this to bind the correct port
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
