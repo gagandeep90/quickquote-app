@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
-import { Viewer } from 'three-dxf';
 
 const backendUrl = 'https://quickquote-app-production-712f.up.railway.app';
 
@@ -12,33 +11,14 @@ function App() {
   const [quantity, setQuantity] = useState(1);
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(false);
-  const previewRef = useRef(null);
 
   const onDrop = (acceptedFiles) => {
     const f = acceptedFiles[0];
     setFile(f);
     setQuote(null);
-    renderThreeDXF(f);
   };
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
-
-  const renderThreeDXF = (file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dxfString = e.target.result;
-      if (previewRef.current) {
-        previewRef.current.innerHTML = ''; // Clear previous viewer
-      }
-      try {
-        const viewer = new Viewer(dxfString, previewRef.current, 800, 600);
-        viewer.render();
-      } catch (err) {
-        console.error('Three-DXF render error:', err);
-      }
-    };
-    reader.readAsText(file);
-  };
 
   const getQuote = async () => {
     if (!file) return;
@@ -53,6 +33,7 @@ function App() {
       const response = await axios.post(`${backendUrl}/quote`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      console.log('Backend Response:', response.data);
       setQuote(response.data);
     } catch (err) {
       console.error('Quote error:', err);
@@ -66,19 +47,13 @@ function App() {
     <div style={{ padding: 40, fontFamily: 'Arial, sans-serif' }}>
       <h2>QuickQuote Platform</h2>
 
+      {/* File Upload */}
       <div {...getRootProps()} style={{ border: '2px dashed gray', padding: 20, marginBottom: 20, cursor: 'pointer' }}>
         <input {...getInputProps()} />
         {file ? <p>{file.name}</p> : <p>Drag & drop DXF file here or click to select</p>}
       </div>
 
-      {/* 3D DXF Viewer */}
-      <div>
-        <h3>Preview</h3>
-        <div ref={previewRef} style={{ border: '1px solid #ccc', width: '100%', height: '600px' }} />
-      </div>
-
-      <br />
-
+      {/* Config */}
       <label>
         Material:
         <select value={material} onChange={(e) => setMaterial(e.target.value)}>
@@ -108,6 +83,15 @@ function App() {
         {loading ? 'Calculating...' : 'Get Quote'}
       </button>
 
+      {/* ✅ Server-Side DXF SVG Preview */}
+      {quote && quote.preview_svg && (
+        <div style={{ border: '1px solid #ccc', marginTop: 20, padding: 10, background: '#fff' }}>
+          <h3>Preview</h3>
+          <div dangerouslySetInnerHTML={{ __html: quote.preview_svg }} />
+        </div>
+      )}
+
+      {/* Quote Results */}
       {quote && !quote.error && (
         <div style={{ marginTop: 30, padding: 20, border: '1px solid #ccc', background: '#f9f9f9' }}>
           <h3>Metrics</h3>
