@@ -1,5 +1,6 @@
+fastapi
+uvicorn
 ezdxf
 matplotlib
 Pillow
-uvicorn
-fastapi
+python-multipart
