@@ -28,19 +28,17 @@ def explode_all_blocks(msp):
 
 @app.post("/preview")
 async def preview(file: UploadFile = File(...)):
-    """Return an SVG preview of the DXF without quoting."""
+    """Return an SVG preview of the DXF."""
     content = await file.read()
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
-            tmp.write(content)
-            tmp.flush()
-            path = tmp.name
+            tmp.write(content); tmp.flush(); path = tmp.name
 
         doc = ezdxf.readfile(path)
         msp = doc.modelspace()
         explode_all_blocks(msp)
 
-        # draw SVG exactly as quote does
+        # Generate SVG exactly like /quote
         import io, matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
 
@@ -53,11 +51,10 @@ async def preview(file: UploadFile = File(...)):
         buf = io.StringIO()
         FigureCanvasSVG(fig).print_svg(buf)
         return JSONResponse({"preview_svg": buf.getvalue()})
+
     except Exception as e:
         traceback.print_exc()
-        return JSONResponse(
-            {"error": f"Preview failed: {str(e)}"}, status_code=500
-        )
+        return JSONResponse({"error": f"Preview failed: {e}"}, status_code=500)
 
 @app.post("/quote")
 async def get_quote(
@@ -66,19 +63,17 @@ async def get_quote(
     thickness: float = Form(...),
     quantity: int = Form(...)
 ):
-    """Parse, metric‑compute, price, and return SVG + quote."""
+    """Return SVG + metrics + pricing for a DXF."""
     content = await file.read()
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
-            tmp.write(content)
-            tmp.flush()
-            path = tmp.name
+            tmp.write(content); tmp.flush(); path = tmp.name
 
         doc = ezdxf.readfile(path)
         msp = doc.modelspace()
         explode_all_blocks(msp)
 
-        # --- generate SVG ---
+        # --- SVG ---
         import io, matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
 
@@ -92,7 +87,7 @@ async def get_quote(
         FigureCanvasSVG(fig).print_svg(buf)
         svg_data = buf.getvalue()
 
-        # --- metrics ---
+        # --- Metrics ---
         min_x = min_y = math.inf
         max_x = max_y = -math.inf
         cut_length = 0.0
@@ -147,30 +142,27 @@ async def get_quote(
 
             elif t == "SPLINE":
                 raw = []
-                # try fit_points
                 if hasattr(e,"fit_points"):
                     fp = e.fit_points
                     if callable(fp): fp = fp()
                     if isinstance(fp,(list,tuple)): raw = fp
-                # else control_points
                 if not raw and hasattr(e,"control_points"):
                     cp = e.control_points
                     if callable(cp): cp = cp()
                     if isinstance(cp,(list,tuple)): raw = cp
-                # flat numeric list
                 if raw and isinstance(raw[0], (int,float)):
                     nums = raw
                     raw = [(nums[i],nums[i+1]) for i in range(0,len(nums),3)]
 
-                pts = []
+                pts=[]
                 for p in raw:
                     if hasattr(p,"x") and hasattr(p,"y"):
                         pts.append((p.x,p.y))
                     elif isinstance(p,(list,tuple)) and len(p)>=2:
                         pts.append((p[0],p[1]))
                     elif hasattr(p,"__array__"):
-                        a = p.tolist()
-                        pts.append((a[0],a[1]))
+                        arr = p.tolist()
+                        pts.append((arr[0],arr[1]))
                 for (x1,y1),(x2,y2) in zip(pts, pts[1:]):
                     cut_length += math.dist((x1,y1),(x2,y2))
                     min_x, max_x = min(min_x,x1,x2), max(max_x,x1,x2)
@@ -191,7 +183,7 @@ async def get_quote(
             "warnings":[]
         }
 
-        # pricing
+        # simple pricing
         area = w*h
         rate = {"Aluminum":50,"Steel":60,"Brass":70}.get(material,50)
         mat_cost = (area/1e6)*rate
@@ -220,4 +212,4 @@ async def get_quote(
         return JSONResponse({"error":f"DXF parsing failed: {e}"},status_code=500)
 
 if __name__=="__main__":
-    uvicorn.run("main:app",host="0.0.0.0",port=int(os.getenv("PORT",8000)))
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT",8000)))
