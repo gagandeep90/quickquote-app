@@ -10,7 +10,7 @@ origins = [
     "http://localhost:3000"
 ]
 
-aapp.add_middleware(
+app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # ✅ Allow all for now
     allow_credentials=True,
