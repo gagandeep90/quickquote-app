@@ -1,4 +1,5 @@
-fastapi
-uvicorn
-python-multipart
 ezdxf
+matplotlib
+Pillow
+uvicorn
+fastapi
