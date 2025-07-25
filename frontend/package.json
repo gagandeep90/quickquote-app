@@ -8,11 +8,13 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "three": "^0.152.0",
+    "three-dxf": "^1.0.0"
   },
-"scripts": {
-  "start": "react-scripts start",
-  "build": "react-scripts build",
-  "postinstall": "npm install dxf-parser@^1.0.0"
-}
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "postinstall": "npm install dxf-parser@^1.0.0"
+  }
 }
