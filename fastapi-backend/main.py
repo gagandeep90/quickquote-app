@@ -106,10 +106,13 @@ async def get_quote(file: UploadFile = File(...),
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
             elif t == "SPLINE":
-                if e.fit_points:
-                    points = [(p[0], p[1]) for p in e.fit_points]
+                # Fixed: use attributes as lists, not callable
+                if hasattr(e, "fit_points") and len(e.fit_points) > 0:
+                    points = [(p.x, p.y) for p in e.fit_points]
+                elif hasattr(e, "control_points") and len(e.control_points) > 0:
+                    points = [(p.x, p.y) for p in e.control_points]
                 else:
-                    points = [(p[0], p[1]) for p in e.control_points]
+                    points = []
 
                 for i in range(len(points) - 1):
                     x1, y1 = points[i]
@@ -143,7 +146,7 @@ async def get_quote(file: UploadFile = File(...),
             "warnings": []
         }
 
-        # Pricing
+        # Pricing calculation
         area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
         material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
         cutting_rate = 0.2
