@@ -33,16 +33,19 @@ async def get_quote(file: UploadFile = File(...),
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
 
-        # ✅ Accurate DXF → SVG using Axes
+        # ✅ Explode all INSERT/BLOCK references
+        for insert in list(msp.query('INSERT')):
+            insert.explode()
+
+        # ✅ Generate server-side SVG
         import io
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
 
-        fig, ax = plt.subplots()  # ✅ use Axes
+        fig, ax = plt.subplots()
         ctx = RenderContext(doc)
         out = MatplotlibBackend(ax)
         out.config = Configuration()
-
         frontend = Frontend(ctx, out)
         frontend.draw_layout(msp, finalize=True)
 
@@ -51,7 +54,7 @@ async def get_quote(file: UploadFile = File(...),
         canvas.print_svg(svg_buffer)
         svg_data = svg_buffer.getvalue()
 
-        # ✅ Metric calculation
+        # ✅ Metric calculations with ARC + SPLINE support
         min_x = min_y = math.inf
         max_x = max_y = -math.inf
         cut_length = 0
@@ -67,11 +70,13 @@ async def get_quote(file: UploadFile = File(...),
                 min_y, max_y = min(min_y, cy - r), max(max_y, cy + r)
                 cut_length += 2 * math.pi * r
                 hole_diams.append(round(r * 2, 2))
+
             elif t == "LINE":
                 x1, y1, x2, y2 = e.dxf.start.x, e.dxf.start.y, e.dxf.end.x, e.dxf.end.y
                 min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                 min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
                 cut_length += math.dist([x1, y1], [x2, y2])
+
             elif t == "LWPOLYLINE":
                 pts = [(v[0], v[1]) for v in e.get_points()]
                 for i in range(len(pts) - 1):
@@ -80,6 +85,29 @@ async def get_quote(file: UploadFile = File(...),
                     x2, y2 = pts[i + 1]
                     min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
+
+            elif t == "ARC":
+                center = e.dxf.center
+                r = e.dxf.radius
+                start_angle = math.radians(e.dxf.start_angle)
+                end_angle = math.radians(e.dxf.end_angle)
+                arc_length = abs(end_angle - start_angle) * r
+                cut_length += arc_length
+                min_x, max_x = min(min_x, center.x - r), max(max_x, center.x + r)
+                min_y, max_y = min(min_y, center.y - r), max(max_y, center.y + r)
+
+            elif t == "SPLINE":
+                fit_points = [p for p in e.fit_points]
+                for i in range(len(fit_points) - 1):
+                    x1, y1 = fit_points[i][0], fit_points[i][1]
+                    x2, y2 = fit_points[i + 1][0], fit_points[i + 1][1]
+                    cut_length += math.dist([x1, y1], [x2, y2])
+                    min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
+                    min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
+
+            else:
+                # ✅ Debug log for unknown entities
+                print(f"Skipping entity: {t}")
 
         if min_x == math.inf:
             return {"error": "No supported entities found in DXF file."}
@@ -94,7 +122,7 @@ async def get_quote(file: UploadFile = File(...),
             "warnings": []
         }
 
-        # ✅ Pricing
+        # ✅ Simple pricing model
         area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
         material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
         cutting_rate = 0.2
