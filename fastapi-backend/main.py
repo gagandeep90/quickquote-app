@@ -2,12 +2,15 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import ezdxf, math, tempfile, os, uvicorn, traceback
-from ezdxf.addons.drawing import matplotlib as ezdxf_draw
+
+# ✅ Correct imports for SVG rendering in latest ezdxf
+from ezdxf.addons.drawing import RenderContext, Frontend
+from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from ezdxf.addons.drawing.config import Configuration
 
 app = FastAPI()
 
-# ✅ Allow all origins for now (replace with Vercel URL later)
+# ✅ Allow all origins (for testing). Replace with your Vercel URL later.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +29,7 @@ async def get_quote(file: UploadFile = File(...),
     content = await file.read()
 
     try:
-        # ✅ Save DXF temporarily
+        # ✅ Save uploaded DXF temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
             tmp.write(content)
             tmp.flush()
@@ -35,22 +38,22 @@ async def get_quote(file: UploadFile = File(...),
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
 
-        # ✅ Generate SVG preview
+        # ✅ Generate accurate SVG preview
         import io
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
 
         fig = plt.figure()
-        ctx = ezdxf_draw.RenderContext(doc)
-        out = ezdxf_draw.MatplotlibBackend(fig, Configuration())
-        ezdxf_draw.draw_layout(msp, ctx, out, finalize=True)
+        ctx = RenderContext(doc)
+        out = MatplotlibBackend(fig, Configuration())
+        Frontend(ctx, out).draw_layout(msp, finalize=True)
 
         svg_buffer = io.StringIO()
         canvas = FigureCanvasSVG(fig)
         canvas.print_svg(svg_buffer)
         svg_data = svg_buffer.getvalue()
 
-        # ✅ Metric calculations
+        # ✅ Calculate metrics
         min_x = min_y = math.inf
         max_x = max_y = -math.inf
         cut_length = 0
