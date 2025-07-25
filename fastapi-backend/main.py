@@ -3,14 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import ezdxf, math, tempfile, os, uvicorn, traceback
 
-# ✅ Correct imports for new ezdxf versions
 from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from ezdxf.addons.drawing.config import Configuration
 
 app = FastAPI()
 
-# ✅ Allow all origins (replace with your Vercel URL in production)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,11 +23,8 @@ async def get_quote(file: UploadFile = File(...),
                     thickness: float = Form(...),
                     quantity: int = Form(...)):
 
-    filename = file.filename.lower()
     content = await file.read()
-
     try:
-        # ✅ Save uploaded DXF temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
             tmp.write(content)
             tmp.flush()
@@ -38,16 +33,15 @@ async def get_quote(file: UploadFile = File(...),
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
 
-        # ✅ Generate accurate SVG preview using corrected MatplotlibBackend
+        # ✅ Accurate DXF → SVG using Axes
         import io
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
 
-        fig = plt.figure()
+        fig, ax = plt.subplots()  # ✅ use Axes
         ctx = RenderContext(doc)
-
-        out = MatplotlibBackend(fig)
-        out.config = Configuration()  # apply drawing config
+        out = MatplotlibBackend(ax)
+        out.config = Configuration()
 
         frontend = Frontend(ctx, out)
         frontend.draw_layout(msp, finalize=True)
@@ -57,7 +51,7 @@ async def get_quote(file: UploadFile = File(...),
         canvas.print_svg(svg_buffer)
         svg_data = svg_buffer.getvalue()
 
-        # ✅ Calculate metrics (bounding box, cut length, holes)
+        # ✅ Metric calculation
         min_x = min_y = math.inf
         max_x = max_y = -math.inf
         cut_length = 0
@@ -100,7 +94,7 @@ async def get_quote(file: UploadFile = File(...),
             "warnings": []
         }
 
-        # ✅ Simple pricing model
+        # ✅ Pricing
         area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
         material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
         cutting_rate = 0.2
