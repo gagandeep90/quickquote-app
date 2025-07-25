@@ -1,6 +1,6 @@
 # QuickQuote App
 
-An instant quoting tool for metal cutting based on uploaded files, inspired by SendCutSend and OshCut.
+An instant quoting
 
 ### 🔧 Tech
 - React frontend (with drag-drop + file upload)
