@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
 
-const backendUrl = 'https://quickquote-app-production.up.railway.app'; // Replace with your Railway URL if different
+const backendUrl = 'https://quickquote-app-production-3e20.up.railway.app'; // Replace with your Railway URL if different
 
 function App() {
   const [file, setFile] = useState(null);
