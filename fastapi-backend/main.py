@@ -33,8 +33,8 @@ async def inspect_dxf(file: UploadFile = File(...)):
             for e in doc.layouts.get(layout.name):
                 entity_types.append(e.dxftype())
 
-        # ✅ Scan all blocks
-        for name in doc.blocks:
+        # ✅ Scan all blocks correctly
+        for name in doc.blocks.block_names():
             block = doc.blocks.get(name)
             for e in block:
                 entity_types.append(e.dxftype())
