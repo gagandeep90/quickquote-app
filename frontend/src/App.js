@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
 
-const backendUrl = 'https://your-backend-url-from-railway.app'; // Replace after deployment
+const backendUrl = 'https://quickquote-app-production.up.railway.app'; // Replace after deployment
 
 function App() {
   const [file, setFile] = useState(null);
