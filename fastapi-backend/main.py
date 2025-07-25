@@ -33,7 +33,7 @@ async def get_quote(file: UploadFile = File(...),
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
 
-        # ✅ Explode all INSERT/BLOCK references
+        # ✅ Explode all INSERT/BLOCK references to flatten geometry
         for insert in list(msp.query('INSERT')):
             insert.explode()
 
@@ -54,7 +54,7 @@ async def get_quote(file: UploadFile = File(...),
         canvas.print_svg(svg_buffer)
         svg_data = svg_buffer.getvalue()
 
-        # ✅ Metric calculations with ARC + SPLINE support
+        # ✅ Metric calculations
         min_x = min_y = math.inf
         max_x = max_y = -math.inf
         cut_length = 0
@@ -63,6 +63,8 @@ async def get_quote(file: UploadFile = File(...),
 
         for e in msp:
             t = e.dxftype()
+            print(f"Entity Type: {t}")  # ✅ Debug log all entity types
+
             if t == "CIRCLE":
                 hole_count += 1
                 cx, cy, r = e.dxf.center.x, e.dxf.center.y, e.dxf.radius
@@ -105,9 +107,27 @@ async def get_quote(file: UploadFile = File(...),
                     min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
+            elif t == "ELLIPSE":
+                center = e.dxf.center
+                major_len = e.dxf.major_axis.magnitude
+                minor_len = major_len * e.dxf.ratio
+                approx_radius = (major_len + minor_len) / 2
+                cut_length += 2 * math.pi * approx_radius
+                min_x, max_x = min(min_x, center.x - approx_radius), max(max_x, center.x + approx_radius)
+                min_y, max_y = min(min_y, center.y - approx_radius), max(max_y, center.y + approx_radius)
+
+            elif t == "HATCH":
+                for path in e.paths:
+                    for edge in path.edges:
+                        if edge.TYPE == "LineEdge":
+                            x1, y1 = edge.start[0], edge.start[1]
+                            x2, y2 = edge.end[0], edge.end[1]
+                            cut_length += math.dist([x1, y1], [x2, y2])
+                            min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
+                            min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
+
             else:
-                # ✅ Debug log for unknown entities
-                print(f"Skipping entity: {t}")
+                print(f"Skipping entity: {t}")  # ✅ Logs unknowns
 
         if min_x == math.inf:
             return {"error": "No supported entities found in DXF file."}
