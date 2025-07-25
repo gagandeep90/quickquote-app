@@ -1,12 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { DXFLoader } from 'three-dxf';
 
 function App() {
   const [file, setFile] = useState(null);
-  const [localPreview, setLocalPreview] = useState(null);
   const [quote, setQuote] = useState(null);
   const [error, setError] = useState(null);
+  const mountRef = useRef(null);
+
+  // Initialize Three.js scene only once
+  useEffect(() => {
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 10000);
+    camera.position.set(0, 0, 200);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(400, 400);
+    mountRef.current.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    const ambient = new THREE.AmbientLight(0x606060);
+    scene.add(ambient);
+    const dir = new THREE.DirectionalLight(0xffffff);
+    dir.position.set(1, 1, 1).normalize();
+    scene.add(dir);
+
+    const dxfGroup = new THREE.Group();
+    scene.add(dxfGroup);
+
+    const loader = new DXFLoader();
+
+    let frameId = null;
+    const animate = () => {
+      controls.update();
+      renderer.render(scene, camera);
+      frameId = requestAnimationFrame(animate);
+    };
+    animate();
+
+    mountRef.current.scene = scene;
+    mountRef.current.camera = camera;
+    mountRef.current.controls = controls;
+    mountRef.current.loader = loader;
+    mountRef.current.dxfGroup = dxfGroup;
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      renderer.dispose();
+      mountRef.current.removeChild(renderer.domElement);
+    };
+  }, []);
 
   const onDrop = async acceptedFiles => {
     const f = acceptedFiles[0];
@@ -14,20 +64,31 @@ function App() {
     setQuote(null);
     setError(null);
 
-    // Instant server‑side preview call
-    const form = new FormData();
-    form.append('file', f);
-    try {
-      const res = await axios.post(
-        'https://quickquote-app-production-712f.up.railway.app/preview',
-        form,
-        { headers: { 'Content-Type': 'multipart/form-data' }}
-      );
-      setLocalPreview(res.data.preview_svg || null);
-    } catch (err) {
-      console.error('Preview error', err);
-      setLocalPreview(null);
-    }
+    // Load DXF into Three.js scene
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const text = e.target.result;
+        const { scene, loader, dxfGroup, camera, controls } = mountRef.current;
+        // remove old geometry
+        scene.remove(dxfGroup);
+        // parse and add new
+        const newGroup = loader.parse(text);
+        scene.add(newGroup);
+        mountRef.current.dxfGroup = newGroup;
+
+        // fit camera to object
+        const box = new THREE.Box3().setFromObject(newGroup);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        controls.target.copy(center);
+        camera.position.set(center.x, center.y, center.z + Math.max(size.x, size.y, size.z) * 1.2);
+        controls.update();
+      } catch (err) {
+        console.error('3D render error:', err);
+      }
+    };
+    reader.readAsText(f);
   };
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
@@ -43,7 +104,7 @@ function App() {
       const res = await axios.post(
         'https://quickquote-app-production-712f.up.railway.app/quote',
         fd,
-        { headers: { 'Content-Type': 'multipart/form-data' }}
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
       setQuote(res.data);
       setError(null);
@@ -55,7 +116,7 @@ function App() {
 
   return (
     <div style={{ padding: 20, fontFamily: 'Arial' }}>
-      <h2>Quick Quote DXF</h2>
+      <h2>Quick Quote DXF (3D Viewer)</h2>
 
       <div
         {...getRootProps()}
@@ -65,20 +126,13 @@ function App() {
         {file ? <p>{file.name}</p> : <p>Drag & drop DXF here</p>}
       </div>
 
-      {localPreview && (
-        <div
-          style={{
-            border: '1px solid #ccc',
-            width: 400,
-            height: 400,
-            overflow: 'auto',
-            margin: '10px auto',
-          }}
-          dangerouslySetInnerHTML={{ __html: localPreview }}
-        />
-      )}
+      {/* 3D canvas */}
+      <div
+        ref={mountRef}
+        style={{ width: 400, height: 400, border: '1px solid #ccc', margin: 'auto' }}
+      />
 
-      <button onClick={getQuote} style={{ padding: 10 }}>
+      <button onClick={getQuote} style={{ marginTop: 10, padding: 10 }}>
         Get Quote
       </button>
 
@@ -100,20 +154,9 @@ function App() {
           </p>
           {quote.metrics.hole_diameters.length > 0 && (
             <p>
-              <strong>Hole Ø:</strong>{' '}
-              {quote.metrics.hole_diameters.join(', ')} mm
+              <strong>Hole Ø:</strong> {quote.metrics.hole_diameters.join(', ')} mm
             </p>
           )}
-          <div
-            style={{
-              border: '1px solid #ccc',
-              width: 400,
-              height: 400,
-              overflow: 'auto',
-              marginTop: 10,
-            }}
-            dangerouslySetInnerHTML={{ __html: quote.preview_svg }}
-          />
         </div>
       )}
 
