@@ -1,16 +1,74 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
+import DxfParser from 'dxf-parser';
 
 function App() {
   const [file, setFile] = useState(null);
   const [quote, setQuote] = useState(null);
   const [error, setError] = useState(null);
+  const [localPreview, setLocalPreview] = useState(null);
 
   const onDrop = acceptedFiles => {
-    setFile(acceptedFiles[0]);
+    const f = acceptedFiles[0];
+    setFile(f);
     setQuote(null);
     setError(null);
+
+    // ✅ Generate local preview immediately
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parser = new DxfParser();
+        const dxf = parser.parseSync(e.target.result);
+        const entities = dxf.entities || [];
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        let paths = [];
+
+        entities.forEach(ent => {
+          if (ent.type === 'LINE') {
+            const { x: x1, y: y1 } = ent.start;
+            const { x: x2, y: y2 } = ent.end;
+            paths.push(`<line x1="${x1}" y1="${-y1}" x2="${x2}" y2="${-y2}" stroke="black"/>`);
+            minX = Math.min(minX, x1, x2);
+            minY = Math.min(minY, y1, y2);
+            maxX = Math.max(maxX, x1, x2);
+            maxY = Math.max(maxY, y1, y2);
+          }
+
+          if (ent.type === 'SPLINE') {
+            const points = ent.fitPoints && ent.fitPoints.length > 0 ? ent.fitPoints : ent.controlPoints;
+
+            for (let i = 0; i < points.length - 1; i++) {
+              const x1 = points[i].x;
+              const y1 = points[i].y;
+              const x2 = points[i + 1].x;
+              const y2 = points[i + 1].y;
+              paths.push(`<line x1="${x1}" y1="${-y1}" x2="${x2}" y2="${-y2}" stroke="black"/>`);
+              minX = Math.min(minX, x1, x2);
+              minY = Math.min(minY, y1, y2);
+              maxX = Math.max(maxX, x1, x2);
+              maxY = Math.max(maxY, y1, y2);
+            }
+          }
+        });
+
+        if (paths.length > 0) {
+          const width = maxX - minX;
+          const height = maxY - minY;
+          const viewBox = `${minX} ${-maxY} ${width} ${height}`;
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet">${paths.join('')}</svg>`;
+          setLocalPreview(svg);
+        } else {
+          setLocalPreview(null);
+        }
+      } catch (err) {
+        console.error('DXF parse error:', err);
+        setLocalPreview(null);
+      }
+    };
+    reader.readAsText(f);
   };
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
@@ -51,6 +109,19 @@ function App() {
         {file ? <p>{file.name}</p> : <p>Drag & drop DXF file here, or click to select</p>}
       </div>
 
+      {localPreview && (
+        <div style={{
+          border: '1px solid #ccc',
+          margin: '10px 0',
+          width: '400px',
+          height: '400px',
+          background: '#fff',
+          overflow: 'hidden'
+        }}
+          dangerouslySetInnerHTML={{ __html: localPreview }}
+        />
+      )}
+
       <button onClick={getQuote} style={{ padding: '10px 20px' }}>Get Quote</button>
 
       {quote && (
@@ -62,15 +133,14 @@ function App() {
           <p><strong>Hole Count:</strong> {quote.metrics.hole_count}</p>
 
           {quote.preview_svg && (
-            <div
-              style={{
-                border: '1px solid #ccc',
-                marginTop: '10px',
-                width: '400px',
-                height: '400px',
-                overflow: 'auto',
-                background: '#fff'
-              }}
+            <div style={{
+              border: '1px solid #ccc',
+              marginTop: '10px',
+              width: '400px',
+              height: '400px',
+              background: '#fff',
+              overflow: 'hidden'
+            }}
               dangerouslySetInnerHTML={{ __html: quote.preview_svg }}
             />
           )}
