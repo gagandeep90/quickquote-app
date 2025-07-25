@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
 
 // ✅ Replace with your actual Railway backend URL
-const backendUrl = 'https://https://quickquote-app-production-712f.up.railway.app';
+const backendUrl = 'https://quickquote-app-production-712f.up.railway.app';
 
 function App() {
   const [file, setFile] = useState(null);
