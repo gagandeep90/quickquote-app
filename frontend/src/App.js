@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
-import DxfParser from 'dxf-parser';
+import { Viewer } from 'three-dxf';
 
 const backendUrl = 'https://quickquote-app-production-712f.up.railway.app';
 
@@ -12,91 +12,29 @@ function App() {
   const [quantity, setQuantity] = useState(1);
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [previewSvg, setPreviewSvg] = useState(null);
+  const previewRef = useRef(null);
 
   const onDrop = (acceptedFiles) => {
     const f = acceptedFiles[0];
     setFile(f);
     setQuote(null);
-    renderPreview(f);
+    renderThreeDXF(f);
   };
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
 
-  const renderPreview = (file) => {
+  const renderThreeDXF = (file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
+      const dxfString = e.target.result;
+      if (previewRef.current) {
+        previewRef.current.innerHTML = ''; // Clear previous viewer
+      }
       try {
-        console.log('DXF file loaded, parsing...');
-        const parser = new DxfParser();
-        const dxf = parser.parseSync(e.target.result);
-        console.log('Parsed DXF:', dxf);
-        console.log('Entities:', dxf.entities);
-
-        const entities = dxf.entities.filter(ent =>
-          ['LINE','LWPOLYLINE','POLYLINE','CIRCLE','ARC','SPLINE'].includes(ent.type)
-        );
-
-        if (!entities.length) {
-          console.warn('No supported entities for preview.');
-          setPreviewSvg('<p style="color:red">No supported geometry in DXF</p>');
-          return;
-        }
-
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        let paths = '';
-
-        entities.forEach(ent => {
-          if (ent.type === 'LINE') {
-            minX = Math.min(minX, ent.start.x, ent.end.x);
-            maxX = Math.max(maxX, ent.start.x, ent.end.x);
-            minY = Math.min(minY, ent.start.y, ent.end.y);
-            maxY = Math.max(maxY, ent.start.y, ent.end.y);
-            paths += `<line x1="${ent.start.x}" y1="${-ent.start.y}" x2="${ent.end.x}" y2="${-ent.end.y}" stroke="black"/>`;
-          }
-          else if (ent.type === 'CIRCLE') {
-            minX = Math.min(minX, ent.center.x - ent.radius);
-            maxX = Math.max(maxX, ent.center.x + ent.radius);
-            minY = Math.min(minY, ent.center.y - ent.radius);
-            maxY = Math.max(maxY, ent.center.y + ent.radius);
-            paths += `<circle cx="${ent.center.x}" cy="${-ent.center.y}" r="${ent.radius}" stroke="blue" fill="none"/>`;
-          }
-          else if (ent.type === 'LWPOLYLINE' || ent.type === 'POLYLINE') {
-            const pts = (ent.vertices || []).map(v => `${v.x},${-v.y}`).join(' ');
-            minX = Math.min(minX, ...ent.vertices.map(v => v.x));
-            maxX = Math.max(maxX, ...ent.vertices.map(v => v.x));
-            minY = Math.min(minY, ...ent.vertices.map(v => v.y));
-            maxY = Math.max(maxY, ...ent.vertices.map(v => v.y));
-            paths += `<polyline points="${pts}" stroke="black" fill="none"/>`;
-          }
-          else if (ent.type === 'SPLINE') {
-            const pts = (ent.fitPoints || []).map(v => `${v.x},${-v.y}`).join(' ');
-            if (ent.fitPoints?.length) {
-              minX = Math.min(minX, ...ent.fitPoints.map(v => v.x));
-              maxX = Math.max(maxX, ...ent.fitPoints.map(v => v.x));
-              minY = Math.min(minY, ...ent.fitPoints.map(v => v.y));
-              maxY = Math.max(maxY, ...ent.fitPoints.map(v => v.y));
-              paths += `<polyline points="${pts}" stroke="green" fill="none"/>`;
-            }
-          }
-        });
-
-        const width = maxX - minX;
-        const height = maxY - minY;
-        const padding = 10;
-
-        const svg = `
-          <svg xmlns="http://www.w3.org/2000/svg"
-               viewBox="${minX - padding} ${-(maxY + padding)} ${width + padding * 2} ${height + padding * 2}"
-               preserveAspectRatio="xMidYMid meet"
-               style="width:100%;height:auto;border:1px solid #ccc;background:#fff">
-            ${paths}
-          </svg>
-        `;
-        setPreviewSvg(svg);
+        const viewer = new Viewer(dxfString, previewRef.current, 800, 600);
+        viewer.render();
       } catch (err) {
-        console.error('DXF preview error:', err);
-        setPreviewSvg('<p style="color:red">Failed to render DXF preview</p>');
+        console.error('Three-DXF render error:', err);
       }
     };
     reader.readAsText(file);
@@ -115,7 +53,6 @@ function App() {
       const response = await axios.post(`${backendUrl}/quote`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      console.log('Backend Response:', response.data);
       setQuote(response.data);
     } catch (err) {
       console.error('Quote error:', err);
@@ -129,21 +66,19 @@ function App() {
     <div style={{ padding: 40, fontFamily: 'Arial, sans-serif' }}>
       <h2>QuickQuote Platform</h2>
 
-      {/* File Upload */}
       <div {...getRootProps()} style={{ border: '2px dashed gray', padding: 20, marginBottom: 20, cursor: 'pointer' }}>
         <input {...getInputProps()} />
         {file ? <p>{file.name}</p> : <p>Drag & drop DXF file here or click to select</p>}
       </div>
 
-      {/* Preview */}
-      {previewSvg && (
-        <div style={{ marginBottom: 20 }}>
-          <h3>Preview</h3>
-          <div dangerouslySetInnerHTML={{ __html: previewSvg }} />
-        </div>
-      )}
+      {/* 3D DXF Viewer */}
+      <div>
+        <h3>Preview</h3>
+        <div ref={previewRef} style={{ border: '1px solid #ccc', width: '100%', height: '600px' }} />
+      </div>
 
-      {/* Config */}
+      <br />
+
       <label>
         Material:
         <select value={material} onChange={(e) => setMaterial(e.target.value)}>
@@ -173,7 +108,6 @@ function App() {
         {loading ? 'Calculating...' : 'Get Quote'}
       </button>
 
-      {/* Quote Results */}
       {quote && !quote.error && (
         <div style={{ marginTop: 30, padding: 20, border: '1px solid #ccc', background: '#f9f9f9' }}>
           <h3>Metrics</h3>
