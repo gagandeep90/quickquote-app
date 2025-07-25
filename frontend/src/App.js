@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useDropzone } from 'react-dropzone';
 
-const backendUrl = 'https://quickquote-app-production-3e20.up.railway.app'; // Replace with your Railway URL if different
+// ✅ Replace this with your actual Railway backend URL
+const backendUrl = 'https://quickquote-app-production-712f.up.railway.app';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -10,15 +11,18 @@ function App() {
   const [thickness, setThickness] = useState(1);
   const [quantity, setQuantity] = useState(1);
   const [quote, setQuote] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const onDrop = (acceptedFiles) => {
     setFile(acceptedFiles[0]);
+    setQuote(null); // reset quote if new file uploaded
   };
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
 
   const getQuote = async () => {
     if (!file) return;
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('material', material);
@@ -26,22 +30,25 @@ function App() {
     formData.append('quantity', quantity);
 
     try {
+      setLoading(true);
       const response = await axios.post(`${backendUrl}/quote`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setQuote(response.data);
     } catch (err) {
-      console.error(err);
-      alert('Failed to get quote.');
+      console.error('Quote error:', err);
+      alert('Failed to get quote. Check backend logs.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: 40 }}>
-      <h2>QuickQuote App</h2>
+    <div style={{ padding: 40, fontFamily: 'Arial, sans-serif' }}>
+      <h2>QuickQuote Platform</h2>
 
       {/* File Upload */}
-      <div {...getRootProps()} style={{ border: '2px dashed gray', padding: 20, marginBottom: 20 }}>
+      <div {...getRootProps()} style={{ border: '2px dashed gray', padding: 20, marginBottom: 20, cursor: 'pointer' }}>
         <input {...getInputProps()} />
         {file ? <p>{file.name}</p> : <p>Drag & drop DXF/SVG/STEP file here or click to select</p>}
       </div>
@@ -85,12 +92,14 @@ function App() {
 
       <br /><br />
 
-      <button onClick={getQuote} disabled={!file}>Get Quote</button>
+      <button onClick={getQuote} disabled={!file || loading}>
+        {loading ? 'Calculating...' : 'Get Quote'}
+      </button>
 
       {/* Quote Results */}
       {quote && (
-        <div style={{ marginTop: 30 }}>
-          <h3>Metrics</h3>
+        <div style={{ marginTop: 30, padding: 20, border: '1px solid #ccc', background: '#f9f9f9' }}>
+          <h3>Part Metrics</h3>
           <p>Bounding Box: {quote.metrics.bounding_box[0]} x {quote.metrics.bounding_box[1]} mm</p>
           <p>Cut Length: {quote.metrics.cut_length} mm</p>
           <p>Hole Count: {quote.metrics.hole_count}</p>
