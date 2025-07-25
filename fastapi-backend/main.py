@@ -9,7 +9,7 @@ from ezdxf.addons.drawing.config import Configuration
 
 app = FastAPI()
 
-# Enable CORS for frontend
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,7 +43,7 @@ async def get_quote(file: UploadFile = File(...),
 
         explode_all_blocks(msp)
 
-        # Generate SVG preview
+        # SVG Preview
         import io
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
@@ -106,13 +106,23 @@ async def get_quote(file: UploadFile = File(...),
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
             elif t == "SPLINE":
-                # Fixed: use attributes as lists, not callable
+                # Universal handling for different point formats
                 if hasattr(e, "fit_points") and len(e.fit_points) > 0:
-                    points = [(p.x, p.y) for p in e.fit_points]
+                    raw_points = e.fit_points
                 elif hasattr(e, "control_points") and len(e.control_points) > 0:
-                    points = [(p.x, p.y) for p in e.control_points]
+                    raw_points = e.control_points
                 else:
-                    points = []
+                    raw_points = []
+
+                points = []
+                for p in raw_points:
+                    if hasattr(p, "x") and hasattr(p, "y"):
+                        points.append((p.x, p.y))
+                    elif isinstance(p, (list, tuple)) and len(p) >= 2:
+                        points.append((p[0], p[1]))
+                    elif hasattr(p, "__array__"):  # NumPy array
+                        arr = p.tolist()
+                        points.append((arr[0], arr[1]))
 
                 for i in range(len(points) - 1):
                     x1, y1 = points[i]
@@ -146,7 +156,7 @@ async def get_quote(file: UploadFile = File(...),
             "warnings": []
         }
 
-        # Pricing calculation
+        # Pricing
         area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
         material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
         cutting_rate = 0.2
