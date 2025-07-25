@@ -6,7 +6,7 @@ from collections import Counter
 
 app = FastAPI()
 
-# ✅ CORS
+# ✅ Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,19 +26,20 @@ async def inspect_dxf(file: UploadFile = File(...)):
 
         doc = ezdxf.readfile(tmp_path)
 
-        # ✅ Scan all layouts
         entity_types = []
 
+        # ✅ Scan all layouts (modelspace + paperspace)
         for layout in doc.layouts:
             for e in doc.layouts.get(layout.name):
                 entity_types.append(e.dxftype())
 
         # ✅ Scan all blocks
-        for block_name, block in doc.blocks.items():
+        for name in doc.blocks:
+            block = doc.blocks.get(name)
             for e in block:
                 entity_types.append(e.dxftype())
 
-        # ✅ Modelspace entities
+        # ✅ Scan modelspace explicitly
         for e in doc.modelspace():
             entity_types.append(e.dxftype())
 
