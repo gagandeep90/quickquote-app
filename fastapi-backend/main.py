@@ -5,11 +5,12 @@ import math
 import io
 import os
 import uvicorn
+import tempfile
 import traceback
 
 app = FastAPI()
 
-# Allow frontend access
+# Allow CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,12 +38,15 @@ async def get_quote(file: UploadFile = File(...),
         "warnings": []
     }
 
-    # ✅ DXF Parsing
     if filename.endswith(".dxf"):
         try:
-            # Use BytesIO stream explicitly
-            stream = io.BytesIO(content)
-            doc = ezdxf.read(stream)
+            # ✅ Write uploaded file to temp file and load via readfile()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+                tmp.write(content)
+                tmp.flush()
+                tmp_path = tmp.name
+
+            doc = ezdxf.readfile(tmp_path)
             msp = doc.modelspace()
 
             if not msp:
@@ -118,8 +122,8 @@ async def get_quote(file: UploadFile = File(...),
     # ✅ Pricing
     area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
     material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
-    cutting_rate = 0.2  # per meter
-    pierce_rate = 0.05  # per hole
+    cutting_rate = 0.2
+    pierce_rate = 0.05
     setup_fee = 5
 
     material_cost = (area_mm2 / 1e6) * material_rate
