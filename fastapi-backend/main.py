@@ -9,7 +9,7 @@ from ezdxf.addons.drawing.config import Configuration
 
 app = FastAPI()
 
-# ✅ CORS for testing
+# ✅ Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,7 +34,7 @@ async def get_quote(file: UploadFile = File(...),
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
 
-        # ✅ Flatten blocks
+        # ✅ Explode blocks
         for insert in list(msp.query('INSERT')):
             insert.explode()
 
@@ -87,10 +87,9 @@ async def get_quote(file: UploadFile = File(...),
                     x1, y1 = pts[i]
                     x2, y2 = pts[i + 1]
                     min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
-                    min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2])
+                    min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
             elif t == "POLYLINE":
-                # ✅ Fix for ezdxf versions (property vs method)
                 verts_data = e.vertices if isinstance(e.vertices, list) else list(e.vertices())
                 vertices = [(v.dxf.location.x, v.dxf.location.y) for v in verts_data]
                 for i in range(len(vertices) - 1):
@@ -151,7 +150,7 @@ async def get_quote(file: UploadFile = File(...),
             "warnings": []
         }
 
-        # ✅ Simple pricing
+        # ✅ Pricing
         area_mm2 = metrics["bounding_box"][0] * metrics["bounding_box"][1]
         material_rate = {"Aluminum": 50, "Steel": 60, "Brass": 70}.get(material, 50)
         cutting_rate = 0.2
