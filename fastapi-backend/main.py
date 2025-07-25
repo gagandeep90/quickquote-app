@@ -9,7 +9,7 @@ from ezdxf.addons.drawing.config import Configuration
 
 app = FastAPI()
 
-# ✅ Enable CORS
+# ✅ Allow all origins for testing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,11 +34,11 @@ async def get_quote(file: UploadFile = File(...),
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
 
-        # ✅ Explode blocks
+        # ✅ Flatten blocks
         for insert in list(msp.query('INSERT')):
             insert.explode()
 
-        # ✅ Generate SVG
+        # ✅ Generate SVG preview
         import io
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_svg import FigureCanvasSVG
@@ -55,7 +55,7 @@ async def get_quote(file: UploadFile = File(...),
         canvas.print_svg(svg_buffer)
         svg_data = svg_buffer.getvalue()
 
-        # ✅ Metric calculations
+        # ✅ Metrics
         min_x = min_y = math.inf
         max_x = max_y = -math.inf
         cut_length = 0
@@ -67,21 +67,27 @@ async def get_quote(file: UploadFile = File(...),
             print(f"Entity Type: {t}")
 
             if t == "CIRCLE":
+                cx, cy, cz = e.dxf.center.x, e.dxf.center.y, e.dxf.center.z
+                if abs(cz) > 0.001:
+                    print(f"Flattening CIRCLE Z={cz}")
                 hole_count += 1
-                cx, cy, r = e.dxf.center.x, e.dxf.center.y, e.dxf.radius
+                r = e.dxf.radius
                 min_x, max_x = min(min_x, cx - r), max(max_x, cx + r)
                 min_y, max_y = min(min_y, cy - r), max(max_y, cy + r)
                 cut_length += 2 * math.pi * r
                 hole_diams.append(round(r * 2, 2))
 
             elif t == "LINE":
-                x1, y1, x2, y2 = e.dxf.start.x, e.dxf.start.y, e.dxf.end.x, e.dxf.end.y
+                x1, y1, z1 = e.dxf.start.x, e.dxf.start.y, e.dxf.start.z
+                x2, y2, z2 = e.dxf.end.x, e.dxf.end.y, e.dxf.end.z
+                if abs(z1) > 0.001 or abs(z2) > 0.001:
+                    print(f"Flattening LINE Z-values: {z1}, {z2}")
                 min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                 min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
                 cut_length += math.dist([x1, y1], [x2, y2])
 
             elif t == "LWPOLYLINE":
-                pts = [(v[0], v[1]) for v in e.get_points()]
+                pts = [(v[0], v[1]) for v in e.get_points()]  # Ignore Z
                 for i in range(len(pts) - 1):
                     cut_length += math.dist(pts[i], pts[i + 1])
                     x1, y1 = pts[i]
@@ -91,7 +97,12 @@ async def get_quote(file: UploadFile = File(...),
 
             elif t == "POLYLINE":
                 verts_data = e.vertices if isinstance(e.vertices, list) else list(e.vertices())
-                vertices = [(v.dxf.location.x, v.dxf.location.y) for v in verts_data]
+                vertices = []
+                for v in verts_data:
+                    x, y, z = v.dxf.location.x, v.dxf.location.y, v.dxf.location.z
+                    if abs(z) > 0.001:
+                        print(f"Flattening POLYLINE vertex Z={z}")
+                    vertices.append((x, y))
                 for i in range(len(vertices) - 1):
                     x1, y1 = vertices[i]
                     x2, y2 = vertices[i + 1]
@@ -101,6 +112,8 @@ async def get_quote(file: UploadFile = File(...),
 
             elif t == "ARC":
                 center = e.dxf.center
+                if abs(center.z) > 0.001:
+                    print(f"Flattening ARC Z={center.z}")
                 r = e.dxf.radius
                 start_angle = math.radians(e.dxf.start_angle)
                 end_angle = math.radians(e.dxf.end_angle)
@@ -110,16 +123,23 @@ async def get_quote(file: UploadFile = File(...),
                 min_y, max_y = min(min_y, center.y - r), max(max_y, center.y + r)
 
             elif t == "SPLINE":
-                fit_points = [p for p in e.fit_points]
+                fit_points = []
+                for p in e.fit_points:
+                    x, y, z = p[0], p[1], p[2]
+                    if abs(z) > 0.001:
+                        print(f"Flattening SPLINE point Z={z}")
+                    fit_points.append((x, y))
                 for i in range(len(fit_points) - 1):
-                    x1, y1 = fit_points[i][0], fit_points[i][1]
-                    x2, y2 = fit_points[i + 1][0], fit_points[i + 1][1]
+                    x1, y1 = fit_points[i]
+                    x2, y2 = fit_points[i + 1]
                     cut_length += math.dist([x1, y1], [x2, y2])
                     min_x, max_x = min(min_x, x1, x2), max(max_x, x1, x2)
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
             elif t == "ELLIPSE":
                 center = e.dxf.center
+                if abs(center.z) > 0.001:
+                    print(f"Flattening ELLIPSE Z={center.z}")
                 major_len = e.dxf.major_axis.magnitude
                 minor_len = major_len * e.dxf.ratio
                 approx_radius = (major_len + minor_len) / 2
