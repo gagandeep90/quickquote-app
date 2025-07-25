@@ -1,0 +1,1 @@
+# quickquote-app
