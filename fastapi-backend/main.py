@@ -106,13 +106,24 @@ async def get_quote(file: UploadFile = File(...),
                     min_y, max_y = min(min_y, y1, y2), max(max_y, y1, y2)
 
             elif t == "SPLINE":
-                # Universal handling for different point formats
-                if hasattr(e, "fit_points") and len(e.fit_points) > 0:
-                    raw_points = e.fit_points
-                elif hasattr(e, "control_points") and len(e.control_points) > 0:
-                    raw_points = e.control_points
-                else:
-                    raw_points = []
+                # Safe universal SPLINE handler
+                raw_points = []
+
+                # Safe fit_points
+                if hasattr(e, "fit_points"):
+                    fp = e.fit_points
+                    if callable(fp):
+                        fp = fp()
+                    if isinstance(fp, (list, tuple)):
+                        raw_points = fp
+
+                # Fallback to control_points
+                if not raw_points and hasattr(e, "control_points"):
+                    cp = e.control_points
+                    if callable(cp):
+                        cp = cp()
+                    if isinstance(cp, (list, tuple)):
+                        raw_points = cp
 
                 points = []
                 for p in raw_points:
@@ -120,7 +131,7 @@ async def get_quote(file: UploadFile = File(...),
                         points.append((p.x, p.y))
                     elif isinstance(p, (list, tuple)) and len(p) >= 2:
                         points.append((p[0], p[1]))
-                    elif hasattr(p, "__array__"):  # NumPy array
+                    elif hasattr(p, "__array__"):
                         arr = p.tolist()
                         points.append((arr[0], arr[1]))
 
