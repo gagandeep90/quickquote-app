@@ -1,13 +1,16 @@
-# QuickQuote App
+# Advanced DXF Viewer
 
-An instant quoting
+This project provides a simple DXF file viewer that runs entirely in the browser.
+It uses **dxf-parser** and **Three.js** to parse DXF files and render them in 3D.
 
-### 🔧 Tech
-- React frontend (with drag-drop + file upload)
-- Node.js Express backend (dummy pricing)
-- Deploy: Vercel (frontend), Railway (backend)
+## Usage
 
-### ▶️ Deploy it yourself:
+1. Install Node.js if you don't already have it.
+2. Run `node server.js` to start a static file server.
+3. Open [http://localhost:8080](http://localhost:8080) in your browser.
+4. Use the file picker at the top left to upload a `.dxf` file. The file will be
+   parsed and displayed in a 3D scene.
 
-- [Deploy Backend on Railway](https://railway.app/template/new?repo=https://github.com/gagandeep90/quickquote-app&branch=main&rootDir=backend)
-- [Deploy Frontend on Vercel](https://vercel.com/new/clone?repository-url=https://github.com/gagandeep90/quickquote-app&project-name=quickquote-frontend&root-directory=frontend)
+> **Note**: The viewer relies on CDN links for `three`, `OrbitControls`,
+> `dxf-parser`, and `three-dxf`. Internet access is required for the viewer to
+> load these libraries.
